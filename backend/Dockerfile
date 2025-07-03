@@ -14,15 +14,15 @@ RUN npm run build
 
 # 4. Prod
 FROM base AS prod
-ENV NODE_ENV=production
+ENV NODE_ENV=production    # this helps with ignoring dev stuff like logs and dependencies
 
 COPY --from=dependencies /app/package*.json ./
-RUN npm ci --only=production
+RUN npm ci --only=production  # clean install only production dependencies
 
 COPY --from=build /app/dist ./dist
 
 EXPOSE 3001
     
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/main.js"]
 
 
