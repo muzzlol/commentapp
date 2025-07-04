@@ -1,31 +1,40 @@
 services:
   backend:
+    depends_on:
+      - db
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      target: dependencies
+    command: npm run start:dev
     ports:
       - 3001:3001
     env_file:
       - ./backend/.env
     volumes:
       - ./backend:/app
-      - /app/node_modules # ignore our local node_modules in the container
-    depends_on:
-      - db
+      # ignore our local node_modules in the container
+      - /app/node_modules
     networks:
       - app-network
+    restart: unless-stopped
+    # healthcheck: 
+    # todo
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    command: npm run dev
     ports:
-      - 3000:80
+      - 3000:5173
     volumes:
       - ./frontend:/app
       - /app/node_modules
     networks:
       - app-network
+    restart: unless-stopped
+    # healthcheck:
+    # todo
 
   db:
     image: postgres:17-alpine
@@ -37,12 +46,14 @@ services:
       - app-network
     volumes:
       - db:/var/lib/postgresql/data
-
-restart: unless-stopped
+    restart: unless-stopped
+    # healthcheck:
+    # todo
 
 networks:
   app-network:
     driver: bridge
 
 volumes:
-  db: # store data in docker volume for persistence
+# store data in docker volume for persistence
+  db: 
