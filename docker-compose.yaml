@@ -24,6 +24,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: build
     command: npm run dev
     ports:
       - 3000:5173
