@@ -15,7 +15,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
-  async signUp(signUpDto: SignUpDto) {
+  async signUp(signUpDto: SignUpDto): Promise<{ accessToken: string }> {
     const { email, password } = signUpDto;
 
     const salt = await bcrypt.genSalt();
@@ -29,8 +29,11 @@ export class AuthService {
         },
       });
 
-      const { passwordHash: _, ...result } = user;
-      return result;
+      // Generate JWT token for the new user (same logic as signIn)
+      const payload = { sub: user.id, email: user.email, pfpUrl: user.pfpUrl };
+      const accessToken = await this.jwtService.signAsync(payload);
+
+      return { accessToken };
     } catch (error) {
       if (error.code === 'P2002') {
         // Prisma unique constraint violation
