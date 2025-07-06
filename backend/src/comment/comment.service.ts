@@ -5,15 +5,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
-import { Comment } from 'generated/prisma';
+import { Comment } from '@prisma/client';
 
-type CommentWithDetails = Comment & {
+export type CommentWithDetails = Comment & {
   author: { id: string; email: string; pfpUrl: string | null };
   _count?: { replies: number };
   replies?: CommentWithDetails[];
 };
 
-type FormattedComment = {
+export type FormattedComment = {
   id: string;
   content: string;
   author: { id: string; email: string; pfpUrl: string | null };

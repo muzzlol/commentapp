@@ -10,13 +10,13 @@ import {
   Patch,
   Post,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
-import { Request as ExpressRequest } from 'express';
-import { CommentService } from './comment.service';
+import { CommentService, FormattedComment } from './comment.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
+import { Comment } from '@prisma/client';
+import { User } from 'src/auth/user.decorator';
 
 @Controller('comment')
 export class CommentController {
@@ -26,14 +26,13 @@ export class CommentController {
   @Post()
   create(
     @Body() createCommentDto: CreateCommentDto,
-    @Request() req: ExpressRequest,
+    @User() user: { id: string },
   ) {
-    const authorId = (req.user as any).id;
-    return this.commentService.create(createCommentDto, authorId);
+    return this.commentService.create(createCommentDto, user.id);
   }
 
   @Get()
-  findTopLevel() {
+  findTopLevel(): Promise<FormattedComment[]> {
     return this.commentService.findTopLevel();
   }
 
@@ -41,7 +40,7 @@ export class CommentController {
   findReplies(
     @Param('parentId', ParseUUIDPipe) parentId: string,
     @Query() findRepliesDto: FindRepliesDto,
-  ) {
+  ): Promise<FormattedComment[]> {
     return this.commentService.findReplies(parentId, findRepliesDto);
   }
 
@@ -50,10 +49,9 @@ export class CommentController {
   update(
     @Param('commentId', ParseUUIDPipe) commentId: string,
     @Body() editCommentDto: EditCommentDto,
-    @Request() req: ExpressRequest,
-  ) {
-    const userId = (req.user as any).id;
-    return this.commentService.update(commentId, userId, editCommentDto);
+    @User() user: { id: string },
+  ): Promise<Comment> {
+    return this.commentService.update(commentId, user.id, editCommentDto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -61,19 +59,17 @@ export class CommentController {
   @HttpCode(HttpStatus.NO_CONTENT)
   softDelete(
     @Param('commentId', ParseUUIDPipe) commentId: string,
-    @Request() req: ExpressRequest,
-  ) {
-    const userId = (req.user as any).id;
-    return this.commentService.softDelete(commentId, userId);
+    @User() user: { id: string },
+  ): Promise<Comment> {
+    return this.commentService.softDelete(commentId, user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':commentId/restore')
   restore(
     @Param('commentId', ParseUUIDPipe) commentId: string,
-    @Request() req: ExpressRequest,
-  ) {
-    const userId = (req.user as any).id;
-    return this.commentService.restore(commentId, userId);
+    @User() user: { id: string },
+  ): Promise<Comment> {
+    return this.commentService.restore(commentId, user.id);
   }
 }
