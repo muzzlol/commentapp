@@ -25,9 +25,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user) {
       throw new UnauthorizedException();
     }
-    
+
     // inject into the request object of any protected route.
     const { passwordHash, ...result } = user;
     return result;
   }
-} 
+}
