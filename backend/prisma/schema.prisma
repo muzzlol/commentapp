@@ -20,6 +20,8 @@ model User {
 
   // relations
   comments Comment[]
+  sentNotifications Notification[] @relation("NotificationSender")
+  receivedNotifications Notification[] @relation("NotificationRecipient")
   @@map("users")
 }
 
@@ -37,6 +39,28 @@ model Comment {
   parentId String?
   parent Comment? @relation("Replies", fields: [parentId], references: [id])
   replies Comment[] @relation("Replies")
+  
+  notifications Notification[]
 
   @@map("comments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // "reply", "mention", etc. (for future expansion)
+  message   String   // e.g., "John replied to your comment"
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // relations
+  recipientId String
+  recipient   User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  senderId    String
+  sender      User   @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  commentId   String
+  comment     Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
