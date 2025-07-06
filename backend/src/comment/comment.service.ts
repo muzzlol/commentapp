@@ -6,6 +6,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
 import { Comment } from '@prisma/client';
+import { NotificationService } from 'src/notification/notification.service';
 
 export type CommentWithDetails = Comment & {
   author: { id: string; email: string; pfpUrl: string | null };
@@ -28,17 +29,47 @@ export type FormattedComment = {
 
 @Injectable()
 export class CommentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async create(createCommentDto: CreateCommentDto, authorId: string) {
     const { content, parentId } = createCommentDto;
-    return this.prisma.comment.create({
+    
+    const comment = await this.prisma.comment.create({
       data: {
         content,
         authorId,
         parentId,
       },
+      include: {
+        author: {
+          select: {
+            email: true,
+          },
+        },
+      },
     });
+
+    // If this is a reply (has parentId), create a notification for the parent comment's author
+    if (parentId) {
+      const parentComment = await this.prisma.comment.findUnique({
+        where: { id: parentId },
+        select: { authorId: true },
+      });
+
+      if (parentComment) {
+        await this.notificationService.createReplyNotification(
+          parentComment.authorId,
+          authorId,
+          comment.id,
+          comment.author.email,
+        );
+      }
+    }
+
+    return comment;
   }
 
   async findTopLevel() {
@@ -85,7 +116,7 @@ export class CommentService {
   private formatComment(comment: CommentWithDetails): FormattedComment {
     const replyCount = comment._count?.replies ?? 0;
     const formattedReplies =
-      comment.replies?.map((r) => this.formatComment(r)) ?? [];
+      comment.replies?.map((r: CommentWithDetails) => this.formatComment(r)) ?? [];
 
     const { _count, ...rest } = comment;
 
