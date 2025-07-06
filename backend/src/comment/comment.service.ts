@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateCommentDto, FindRepliesDto } from './comment.dto';
+import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
 import { Comment } from 'generated/prisma';
 
 type CommentWithDetails = Comment & {
@@ -91,5 +95,72 @@ export class CommentService {
       replyCount: replyCount,
       hasMoreReplies: replyCount > formattedReplies.length,
     };
+  }
+
+  async update(
+    commentId: string,
+    userId: string,
+    editCommentDto: EditCommentDto,
+  ) {
+    const comment = await this.findCommentForUpdate(commentId, userId);
+
+    // Rule: User can only edit within 15 minutes of creation.
+    const fifteenMinutes = 15 * 60 * 1000;
+    if (new Date().getTime() - comment.createdAt.getTime() > fifteenMinutes) {
+      throw new ForbiddenException(
+        'You can no longer edit this comment.',
+      );
+    }
+
+    return this.prisma.comment.update({
+      where: { id: commentId },
+      data: { content: editCommentDto.content },
+    });
+  }
+
+  async softDelete(commentId: string, userId: string) {
+    await this.findCommentForUpdate(commentId, userId);
+
+    return this.prisma.comment.update({
+      where: { id: commentId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  async restore(commentId: string, userId: string) {
+    const comment = await this.findCommentForUpdate(commentId, userId);
+
+    if (!comment.deletedAt) {
+      throw new ForbiddenException('This comment has not been deleted.');
+    }
+
+    // Rule: User can only restore within 15 minutes of deletion.
+    const fifteenMinutes = 15 * 60 * 1000;
+    if (new Date().getTime() - comment.deletedAt.getTime() > fifteenMinutes) {
+      throw new ForbiddenException(
+        'The 15-minute grace period for restoring this comment has passed.',
+      );
+    }
+
+    return this.prisma.comment.update({
+      where: { id: commentId },
+      data: { deletedAt: null },
+    });
+  }
+
+  private async findCommentForUpdate(commentId: string, userId: string) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found.');
+    }
+
+    if (comment.authorId !== userId) {
+      throw new ForbiddenException('You are not the author of this comment.');
+    }
+
+    return comment;
   }
 }

@@ -1,9 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   Request,
@@ -12,7 +16,7 @@ import {
 import { Request as ExpressRequest } from 'express';
 import { CommentService } from './comment.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { CreateCommentDto, FindRepliesDto } from './comment.dto';
+import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
 
 @Controller('comment')
 export class CommentController {
@@ -39,5 +43,37 @@ export class CommentController {
     @Query() findRepliesDto: FindRepliesDto,
   ) {
     return this.commentService.findReplies(parentId, findRepliesDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':commentId')
+  update(
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @Body() editCommentDto: EditCommentDto,
+    @Request() req: ExpressRequest,
+  ) {
+    const userId = (req.user as any).id;
+    return this.commentService.update(commentId, userId, editCommentDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':commentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  softDelete(
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    const userId = (req.user as any).id;
+    return this.commentService.softDelete(commentId, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':commentId/restore')
+  restore(
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    const userId = (req.user as any).id;
+    return this.commentService.restore(commentId, userId);
   }
 }
