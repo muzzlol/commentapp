@@ -26,7 +26,7 @@ The entire application is containerized and can be run with a single command.
 
 2.  Start the entire application stack:
     ```bash
-    docker compose up --build
+    docker compose -f docker-compose.dev.yaml up --build
     ```
 
 The `--build` flag is recommended for the first run to ensure the Docker images are built from the latest source code.

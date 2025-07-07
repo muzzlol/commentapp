@@ -4,7 +4,7 @@ services:
       - db
     build:
       context: ./backend
-      target: dependencies
+      dockerfile: Dockerfile
     command: npm run start:dev
     ports:
       - 3001:3001
@@ -17,8 +17,6 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-    # healthcheck: 
-    # todo
 
   frontend:
     build:
@@ -34,8 +32,6 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-    # healthcheck:
-    # todo
 
   db:
     image: postgres:17-alpine
@@ -48,8 +44,6 @@ services:
     volumes:
       - db:/var/lib/postgresql/data
     restart: unless-stopped
-    # healthcheck:
-    # todo
 
 networks:
   app-network:
