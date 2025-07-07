@@ -9,7 +9,7 @@ services:
     ports:
       - 3001:3001
     env_file:
-      - ./backend/.env
+      - ./backend/.env.dev
     volumes:
       - ./backend:/app
       # ignore our local node_modules in the container
