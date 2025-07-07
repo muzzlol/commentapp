@@ -12,9 +12,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CommentService, FormattedComment } from './comment.service';
+import { CommentService, ThreadsResponse } from './comment.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
+import { CreateCommentDto, EditCommentDto, FindThreadsDto } from './comment.dto';
 import { Comment } from '@prisma/client';
 import { User } from 'src/auth/user.decorator';
 
@@ -32,16 +32,8 @@ export class CommentController {
   }
 
   @Get()
-  findTopLevel(): Promise<FormattedComment[]> {
-    return this.commentService.findTopLevel();
-  }
-
-  @Get(':parentId/replies')
-  findReplies(
-    @Param('parentId', ParseUUIDPipe) parentId: string,
-    @Query() findRepliesDto: FindRepliesDto,
-  ): Promise<FormattedComment[]> {
-    return this.commentService.findReplies(parentId, findRepliesDto);
+  findThreads(@Query() dto: FindThreadsDto): Promise<ThreadsResponse> {
+    return this.commentService.findThreads(dto);
   }
 
   @UseGuards(JwtAuthGuard)

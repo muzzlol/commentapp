@@ -4,27 +4,31 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateCommentDto, EditCommentDto, FindRepliesDto } from './comment.dto';
+import { CreateCommentDto, EditCommentDto, FindThreadsDto } from './comment.dto';
 import { Comment } from '@prisma/client';
 import { NotificationService } from 'src/notification/notification.service';
 
-export type CommentWithDetails = Comment & {
-  author: { id: string; email: string; pfpUrl: string | null };
-  _count?: { replies: number };
-  replies?: CommentWithDetails[];
-};
-
-export type FormattedComment = {
+export type BasicComment = {
   id: string;
   content: string;
   author: { id: string; email: string; pfpUrl: string | null };
-  parentId: string | null;
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;
-  replyCount: number;
-  replies: FormattedComment[];
-  hasMoreReplies: boolean;
+};
+
+export type CommentNode = {
+  comment: BasicComment;
+  replies: CommentNode[];
+};
+
+export type ThreadsResponse = {
+  comments: CommentNode[];
+  info: {
+    count: number;
+    count_left: number;
+    last_comment: string | null;
+  };
 };
 
 @Injectable()
@@ -72,60 +76,130 @@ export class CommentService {
     return comment;
   }
 
-  async findTopLevel() {
-    const topLevelComments = await this.prisma.comment.findMany({
-      where: { parentId: null, deletedAt: null },
+  async findThreads(dto: FindThreadsDto): Promise<ThreadsResponse> {
+    const { limit, offset_id } = dto;
+
+    //  for paging
+    let cursorFilter = {};
+    if (offset_id) {
+      const offsetComment = await this.prisma.comment.findUnique({ where: { id: offset_id } });
+      if (offsetComment) {
+        cursorFilter = { createdAt: { gt: offsetComment.createdAt } };
+      }
+    }
+
+    // fetch potential top-level roots in creation order
+    const topLevels = await this.prisma.comment.findMany({
+      where: { parentId: null, deletedAt: null, ...cursorFilter },
       orderBy: { createdAt: 'asc' },
-      include: {
-        author: { select: { id: true, email: true, pfpUrl: true } },
-        _count: { select: { replies: true } },
-        replies: {
-          take: 2, // Include a sample of 2 replies (prisma optimizes this to be a few queries not N+1)
-          orderBy: { createdAt: 'asc' },
-          where: { deletedAt: null },
-          include: {
-            author: { select: { id: true, email: true, pfpUrl: true } },
-            _count: { select: { replies: true } },
-          },
-        },
-      },
+      select: { id: true },
     });
 
-    return topLevelComments.map((comment: CommentWithDetails) =>
-      this.formatComment(comment),
-    );
-  }
+    const resultThreads: CommentNode[] = [];
+    let runningTotal = 0;
 
-  async findReplies(parentId: string, findRepliesDto: FindRepliesDto) {
-    const { offset, limit } = findRepliesDto;
+    for (const tl of topLevels) {
+      const { node, size } = await this.buildThread(tl.id);
 
-    const replies = await this.prisma.comment.findMany({
-      where: { parentId: parentId, deletedAt: null },
-      orderBy: { createdAt: 'asc' },
-      skip: offset,
-      take: limit,
-      include: {
-        author: { select: { id: true, email: true, pfpUrl: true } },
-        _count: { select: { replies: true } },
-      },
-    });
+      if (node && (runningTotal + size <= limit || resultThreads.length === 0)) {
+        resultThreads.push(node);
+        runningTotal += size;
+        if (runningTotal >= limit) break;           // exceeded due to first thread
+      } else if (node) {
+        break;                                      // next thread would overflow
+      }
+    }
 
-    return replies.map((reply: CommentWithDetails) => this.formatComment(reply));
-  }
-
-  private formatComment(comment: CommentWithDetails): FormattedComment {
-    const replyCount = comment._count?.replies ?? 0;
-    const formattedReplies =
-      comment.replies?.map((r: CommentWithDetails) => this.formatComment(r)) ?? [];
-
-    const { _count, ...rest } = comment;
+    // overall counts (soft-deleted excluded)
+    const totalCount = await this.prisma.comment.count({ where: { deletedAt: null } });
 
     return {
-      ...rest,
-      replies: formattedReplies,
-      replyCount: replyCount,
-      hasMoreReplies: replyCount > formattedReplies.length,
+      comments: resultThreads,
+      info: {
+        count: totalCount,
+        count_left: totalCount - runningTotal,
+        last_comment: resultThreads.at(-1)?.comment.id ?? null,
+      },
     };
+  }
+
+  private async buildThread(rootId: string): Promise<{ node: CommentNode | null; size: number }> {
+    const flatComments = await this.fetchThreadWithDescendants(rootId);
+    
+    // This case should not be hit if called from findThreads (which filters for non-deleted
+    // roots), but serves as a defensive check.
+    if (flatComments.length === 0) {
+      return { node: null, size: 0 };
+    }
+    
+    const { roots, size } = this.buildTreeFromFlatList(flatComments);
+    
+    // The CTE guarantees we only get descendants of rootId, so there will be one root.
+    return { node: roots[0], size };
+  }
+
+  private async fetchThreadWithDescendants(rootId: string): Promise<(BasicComment & { parentId: string | null })[]> {
+    const results: any[] = await this.prisma.$queryRaw`
+      WITH RECURSIVE "CommentTree" AS (
+        -- Anchor: Select the root comment
+        SELECT 
+          c."id", c."content", c."createdAt", c."updatedAt", c."deletedAt", c."authorId", c."parentId",
+          u."email", u."pfpUrl"
+        FROM "comments" c
+        JOIN "users" u ON c."authorId" = u."id"
+        WHERE c.id = ${rootId} AND c."deletedAt" IS NULL
+
+        UNION ALL
+
+        -- Recursive: Select replies to comments in the tree
+        SELECT 
+          c."id", c."content", c."createdAt", c."updatedAt", c."deletedAt", c."authorId", c."parentId",
+          u."email", u."pfpUrl"
+        FROM "comments" c
+        JOIN "users" u ON c."authorId" = u."id"
+        JOIN "CommentTree" ct ON c."parentId" = ct.id
+        WHERE c."deletedAt" IS NULL
+      )
+      SELECT * FROM "CommentTree" ORDER BY "createdAt" ASC;
+    `;
+    
+    // Format the raw SQL result into our BasicComment type
+    return results.map(r => ({
+      id: r.id,
+      content: r.content,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      deletedAt: r.deletedAt,
+      parentId: r.parentId,
+      author: {
+        id: r.authorId,
+        email: r.email,
+        pfpUrl: r.pfpUrl,
+      },
+    }));
+  }
+  
+  private buildTreeFromFlatList(comments: (BasicComment & { parentId: string | null })[]): { roots: CommentNode[], size: number } {
+    const nodeMap = new Map<string, CommentNode>();
+    const rootNodes: CommentNode[] = [];
+
+    // First pass: create a node for each comment and store it in a map
+    for (const c of comments) {
+      const node: CommentNode = { comment: c, replies: [] };
+      nodeMap.set(c.id, node);
+    }
+
+    // Second pass: link nodes to their parents
+    for (const c of comments) {
+      const node = nodeMap.get(c.id)!;
+      if (c.parentId && nodeMap.has(c.parentId)) {
+        nodeMap.get(c.parentId)!.replies.push(node);
+      } else {
+        rootNodes.push(node); // This is a top-level comment in the list
+      }
+    }
+    
+    return { roots: rootNodes, size: comments.length };
   }
 
   async update(
