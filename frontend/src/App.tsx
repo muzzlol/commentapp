@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { LoginForm } from '@/components/LoginForm';
 import { SignupForm } from '@/components/SignupForm';
 import { CommentSection } from '@/components/CommentSection';
+import { NotificationBell } from '@/components/NotificationBell';
 
 // User Profile Component (for authenticated header)
 function UserProfile() {
@@ -24,9 +25,12 @@ function UserProfile() {
         </h1>
         <p className="text-sm text-gray-600">{user.email}</p>
       </div>
-      <Button onClick={logout} variant="outline" size="sm" className="mt-4">
-        Logout
-      </Button>
+      <div className="flex items-center gap-2 mt-4">
+        <Button onClick={logout} variant="outline" size="sm">
+          Logout
+        </Button>
+        <NotificationBell />
+      </div>
     </div>
   );
 }
