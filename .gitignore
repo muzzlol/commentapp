@@ -37,6 +37,8 @@ task.md
 !.vscode/extensions.json
 
 # dotenv environment variable files
+.env.dev
+.env.db
 .env.development.local
 .env.test.local
 .env.production.local
