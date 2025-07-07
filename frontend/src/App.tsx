@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { LoginForm } from '@/components/LoginForm';
 import { SignupForm } from '@/components/SignupForm';
+import { CommentSection } from '@/components/CommentSection';
 
 // User Profile Component (for authenticated header)
 function UserProfile() {
@@ -121,12 +122,6 @@ function Header() {
 function MainContent() {
   const { isAuthenticated } = useAuth();
 
-  const PlaceholderBox = ({ children }: { children: React.ReactNode }) => (
-    <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-gray-500">
-      {children}
-    </div>
-  );
-
   return (
     <main className="max-w-4xl mx-auto px-4 py-6">
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -137,18 +132,14 @@ function MainContent() {
             <p className="text-gray-600">
               Welcome! You can now participate in discussions by posting comments and replies.
             </p>
-            <PlaceholderBox>
-              <p>Comments section</p>
-            </PlaceholderBox>
+            <CommentSection />
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-gray-600">
               Browse comments and discussions below. Join the conversation by logging in or signing up!
             </p>
-            <PlaceholderBox>
-              <p>Comments section (read-only for guests)</p>
-            </PlaceholderBox>
+            <CommentSection />
           </div>
         )}
       </div>

@@ -17,10 +17,15 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { CreateCommentDto, EditCommentDto, FindThreadsDto } from './comment.dto';
 import { Comment } from '@prisma/client';
 import { User } from 'src/auth/user.decorator';
+import { seedComments } from './seed';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('comment')
 export class CommentController {
-  constructor(private readonly commentService: CommentService) {}
+  constructor(
+    private readonly commentService: CommentService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post()
@@ -63,5 +68,11 @@ export class CommentController {
     @User() user: { id: string },
   ): Promise<Comment> {
     return this.commentService.restore(commentId, user.id);
+  }
+
+  @Post('seed')
+  @HttpCode(HttpStatus.OK)
+  async seed() {
+    return seedComments(this.prisma);
   }
 }
